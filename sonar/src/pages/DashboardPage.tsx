@@ -47,7 +47,7 @@ useEffect(() => {
   const handleSuggestActivities = async () => {
     setIsLoading(true);
     try {
-      const activities = await getSuggestedActivities();
+      const activities = await getSuggestedActivities(user?.id);
       setSuggestedActivities(activities);
       console.log('Loaded suggested activities:', activities);
     } catch (error) {

@@ -28,32 +28,98 @@ export default function AuthPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        // Zapisz użytkownika w context
+        setUser({ 
+          id: data.id || Date.now(), 
+          login: email, 
+          preferencje: data.preferencje || '' 
+        });
+        
+        // Utwórz sesję (mock)
+        const sessionToken = `session_${data.id || Date.now()}_${Date.now()}`;
+        localStorage.setItem('sessionToken', sessionToken);
+        localStorage.setItem('sessionUser', JSON.stringify({
+          id: data.id || Date.now(),
+          login: email,
+          preferencje: data.preferencje || '',
+          loginTime: new Date().toISOString()
+        }));
         localStorage.setItem('isAuthenticated', 'true');
         localStorage.removeItem('surveyCompleted');
-        console.log('User registered successfully');
+        
+        console.log('User registered successfully', data);
+        console.log('Session created:', sessionToken);
         navigate('/survey');
       } else {
         console.error('Registration failed:', response.statusText);
+        alert('Rejestracja nie powiodła się');
       }
     } catch (error) {
       console.error('Error during registration:', error);
+      alert('Błąd podczas rejestracji');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Logowanie - zamokowane (mock)
+  // Logowanie - pobiera użytkownika z API po loginie
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      // TODO: Implementacja rzeczywistego logowania z API
-      localStorage.setItem('isAuthenticated', 'true');
-      const surveyCompleted = localStorage.getItem('surveyCompleted');
-      console.log('User logged in successfully');
-      navigate(surveyCompleted ? '/dashboard' : '/survey');
+      const email = emailRef.current?.value || '';
+      
+      const response = await fetch('https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Users/bylogin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: email
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Zapisz użytkownika w context
+        setUser({ 
+          id: data.id, 
+          login: data.login, 
+          preferencje: data.preferencje || '' 
+        });
+        
+        // Utwórz sesję (mock)
+        const sessionToken = `session_${data.id}_${Date.now()}`;
+        localStorage.setItem('sessionToken', sessionToken);
+        localStorage.setItem('sessionUser', JSON.stringify({
+          id: data.id,
+          login: data.login,
+          preferencje: data.preferencje || '',
+          loginTime: new Date().toISOString()
+        }));
+        localStorage.setItem('isAuthenticated', 'true');
+        
+        // Jeśli użytkownik już wypełnił ankietę, zapisz preferencje
+        if (data.preferencje && data.preferencje.trim() !== '') {
+          localStorage.setItem('userPreferencesString', data.preferencje);
+          localStorage.setItem('surveyCompleted', 'true');
+        }
+        
+        console.log('User logged in successfully', data);
+        console.log('Session created:', sessionToken);
+        // Zawsze idź do dashboard przy logowaniu
+        navigate('/dashboard');
+      } else if (response.status === 404) {
+        console.error('User not found');
+        alert('Użytkownik nie istnieje. Proszę się zarejestrować.');
+      } else {
+        console.error('Login failed:', response.statusText);
+        alert('Logowanie nie powiodło się');
+      }
     } catch (error) {
       console.error('Error during login:', error);
+      alert('Błąd podczas logowania');
     } finally {
       setIsLoading(false);
     }

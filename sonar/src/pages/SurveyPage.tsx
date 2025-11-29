@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Check } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface Question {
   id: number;
@@ -54,8 +55,10 @@ const questions: Question[] = [
 
 export default function SurveyPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string | string[]>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const currentQuestion = questions[currentStep];
   const progress = ((currentStep + 1) / questions.length) * 100;
@@ -86,7 +89,7 @@ export default function SurveyPage() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Serializacja odpowiedzi do stringa
     const serializedAnswers = Object.entries(answers).map(([questionId, answer]) => {
       const question = questions.find(q => q.id === parseInt(questionId));
@@ -101,10 +104,53 @@ export default function SurveyPage() {
     console.log('Survey answers:', answers);
     console.log('Serialized answers string:', serializedAnswers);
     
-    localStorage.setItem('surveyCompleted', 'true');
-    localStorage.setItem('userPreferences', JSON.stringify(answers));
-    localStorage.setItem('userPreferencesString', serializedAnswers);
-    navigate('/dashboard');
+    setIsSubmitting(true);
+    try {
+      if (!user?.id) {
+        console.error('User ID not found');
+        alert('Błąd: Użytkownik nie zalogowany');
+        return;
+      }
+
+      // Wyślij odpowiedzi ankiety do API
+      const response = await fetch(
+        `https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Users/${user.id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            login: user.login,
+            preferencje: serializedAnswers
+          }),
+        }
+      );
+
+      const text = await response.text();
+      if (text) {
+        try {
+          const data = JSON.parse(text);
+          console.log('Survey saved successfully:', data);
+        } catch {
+          console.log('Survey saved (no JSON response)');
+        }
+      } else {
+        console.log('Survey saved successfully');
+      }
+
+      // Zapisz lokalnie
+      localStorage.setItem('surveyCompleted', 'true');
+      localStorage.setItem('userPreferences', JSON.stringify(answers));
+      localStorage.setItem('userPreferencesString', serializedAnswers);
+      
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Error submitting survey:', error);
+      alert('Błąd podczas zapisywania ankiety');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isAnswered = () => {

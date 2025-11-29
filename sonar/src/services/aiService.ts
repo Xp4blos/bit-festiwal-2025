@@ -75,27 +75,45 @@ Odpowiedz w formacie JSON:
 /**
  * Sugeruje 5 najlepszych aktywności na podstawie wypełnionej ankiety użytkownika
  */
-export async function getSuggestedActivities(): Promise<SuggestedActivity[]> {
-  // Pobierz dane ankiety z localStorage
-  const surveyAnswersString = localStorage.getItem('userPreferencesString');
-  
-  if (!surveyAnswersString) {
-    console.warn('No survey data found');
-    return [];
-  }
+export async function getSuggestedActivities(userId?: number): Promise<SuggestedActivity[]> {
+  try {
+    if (!userId) {
+      console.warn('User ID not provided');
+      return [];
+    }
 
-  // Przygotuj prompt z danymi aktywności
-  const activitiesData = INITIAL_ACTIVITIES.map(activity => ({
-    id: activity.id,
-    title: activity.title,
-    desc: activity.desc,
-    type: activity.type,
-    author: activity.author,
-    date: activity.date,
-    time: activity.time
-  }));
+    // Pobierz dane użytkownika z API
+    const userResponse = await fetch(
+      `https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Users/${userId}`
+    );
 
-  const prompt = `
+    if (!userResponse.ok) {
+      console.error('Failed to fetch user data');
+      return [];
+    }
+
+    const userData = await userResponse.json();
+    const surveyAnswersString = userData.preferencje;
+
+    if (!surveyAnswersString || surveyAnswersString.trim() === '') {
+      console.warn('No preferences found for user');
+      return [];
+    }
+
+    console.log('User preferences from API:', surveyAnswersString);
+
+    // Przygotuj prompt z danymi aktywności
+    const activitiesData = INITIAL_ACTIVITIES.map(activity => ({
+      id: activity.id,
+      title: activity.title,
+      desc: activity.desc,
+      type: activity.type,
+      author: activity.author,
+      date: activity.date,
+      time: activity.time
+    }));
+
+    const prompt = `
 Jesteś asystentem AI, który pomaga użytkownikom znaleźć najlepsze wydarzenia społeczne.
 
 Preferencje użytkownika z ankiety:
@@ -123,17 +141,16 @@ Odpowiedz w formacie JSON (tylko surowy JSON, bez markdown):
 Wybierz 5 wydarzeń z najwyższym dopasowaniem.
 `;
 
-  try {
     const response = await sendPromptToGemini(prompt);
     // Usuń markdown formatting jeśli istnieje
     const jsonText = response.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
     const suggestions = JSON.parse(jsonText);
-    
+
     // Połącz z pełnymi danymi aktywności
     const suggestedActivities: SuggestedActivity[] = suggestions.map((suggestion: any) => {
       const activity = INITIAL_ACTIVITIES.find(a => a.id === suggestion.id);
       if (!activity) return null;
-      
+
       return {
         ...activity,
         score: suggestion.score,
@@ -141,7 +158,7 @@ Wybierz 5 wydarzeń z najwyższym dopasowaniem.
         icebreaker: suggestion.icebreaker
       };
     }).filter(Boolean);
-    
+
     console.log('Suggested activities:', suggestedActivities);
     return suggestedActivities;
   } catch (error) {
