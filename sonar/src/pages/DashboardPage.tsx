@@ -2,28 +2,46 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Map, LogOut, BarChart3, Users, Calendar, TrendingUp, Sparkles } from 'lucide-react';
 import { getSuggestedActivities } from '../services/aiService';
+import { useAuth } from '../context/AuthContext';
 import type { SuggestedActivity } from '../types';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [suggestedActivities, setSuggestedActivities] = useState<SuggestedActivity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-//   const [todos, setTodos] = useState<any[]>([]);
+  const [todos, setTodos] = useState<any[]>([]);
 
-//   useEffect(() => {
-//     const fetchTodos = async () => {
-//       try {
-//         const response = await fetch('https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/todos');
-//         const data = await response.json();
-//         setTodos(data);
-//         console.log('Fetched todos:', data);
-//       } catch (error) {
-//         console.error('Error fetching todos:', error);
-//       }
-//     };
+useEffect(() => {
+  const fetchUser = async () => {
+    try {
+      const response = await fetch('https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Users/10', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: 'twojLogin',
+          preferencje: 'twojePreferencje'
+        }),
+      });
 
-//     fetchTodos();
-//   }, []);
+      const text = await response.text();
+      if (text) {
+        const data = JSON.parse(text);
+        setTodos(data);
+        console.log('Fetched user:', data);
+      } else {
+        setTodos([]);
+        console.log('No content returned from API');
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    }
+  };
+
+  fetchUser();
+}, []);
 
 
   const handleSuggestActivities = async () => {
@@ -40,7 +58,7 @@ export default function DashboardPage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
+    logout();
     navigate('/auth');
   };
 
@@ -57,7 +75,10 @@ export default function DashboardPage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+              {user && <p className="text-sm text-gray-600 mt-1">Zalogowany jako: <span className="font-semibold">{user.login}</span></p>}
+            </div>
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
