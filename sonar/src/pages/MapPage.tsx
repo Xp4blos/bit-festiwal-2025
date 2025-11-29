@@ -7,10 +7,13 @@ import {
   Sparkles,
   Radio,
   CalendarDays,
+  Crosshair,
+  X,
+  RotateCcw,
 } from "lucide-react";
-import type { Activity } from "../types";
-import { INITIAL_ACTIVITIES, CURRENT_USER_LOCATION } from "../data/mockData";
-
+import type { Activity, Location } from "../types";
+import { INITIAL_ACTIVITIES } from "../data/mockData";
+import useGeoLocation from "../hooks/useGeoLocation";
 import MapView from "../components/map/MapView";
 import ActivityCard from "../components/activity/ActivityCard";
 
@@ -34,6 +37,30 @@ const calculateDistance = (
 };
 
 const MapPage: React.FC = () => {
+  // --- GEOLOKALIZACJA ---
+  const locationState = useGeoLocation();
+
+  // Stan dla ręcznie wybranej lokalizacji
+  const [manualLocation, setManualLocation] = useState<Location | null>(null);
+
+  // Stan trybu wybierania (czy użytkownik właśnie klika w mapę?)
+  const [isChoosingLocation, setIsChoosingLocation] = useState(false);
+
+  // Ostateczna lokalizacja: Ręczna > GPS > Domyślna
+  const currentLocation = useMemo(() => {
+    if (manualLocation) return manualLocation;
+
+    // Jeśli GPS jeszcze nie dostarczył współrzędnych, użyj domyślnych (Warszawa)
+    const lat = locationState.coordinates?.latitude ?? 52.2297;
+    const lng = locationState.coordinates?.longitude ?? 21.0122;
+
+    return {
+      lat,
+      lng,
+    };
+  }, [locationState.coordinates, manualLocation]);
+
+  // --- POZOSTAŁE STANY ---
   const [activities] = useState<Activity[]>(INITIAL_ACTIVITIES);
   const [radius, setRadius] = useState<number>(2);
   const [isCustomRadius, setIsCustomRadius] = useState<boolean>(false);
@@ -42,28 +69,22 @@ const MapPage: React.FC = () => {
   );
   const [isDevMode, setDevMode] = useState<boolean>(false);
 
-  // 1. Najpierw filtrujemy po radiusie
+  // --- FILTROWANIE ---
   const visibleActivities = useMemo(() => {
     return activities.filter((activity) => {
       const dist = calculateDistance(
-        CURRENT_USER_LOCATION.lat,
-        CURRENT_USER_LOCATION.lng,
+        currentLocation.lat,
+        currentLocation.lng,
         activity.lat,
         activity.lng
       );
       return dist <= radius;
     });
-  }, [activities, radius]);
+  }, [activities, radius, currentLocation]);
 
-  // 2. Dzielimy na sekcje: Proponowane, Live, Nadchodzące
   const { recommended, live, upcoming } = useMemo(() => {
     const now = new Date();
-
-    // Filtrujemy tylko aktywne (nie zakończone) do głównych list
-    // isEnded === false (0)
     const activeActivities = visibleActivities.filter((a) => !a.isEnded);
-
-    // Dzielimy aktywne na Live (start w przeszłości) i Upcoming (start w przyszłości)
     const liveActivities: Activity[] = [];
     const upcomingActivities: Activity[] = [];
 
@@ -76,29 +97,23 @@ const MapPage: React.FC = () => {
       }
     });
 
-    // Sortujemy Live: od najnowszych
-    liveActivities.sort((a, b) => {
-      return (
+    liveActivities.sort(
+      (a, b) =>
         new Date(`${b.date}T${b.time}`).getTime() -
         new Date(`${a.date}T${a.time}`).getTime()
-      );
-    });
-
-    // Sortujemy Upcoming: od najbliższych
-    upcomingActivities.sort((a, b) => {
-      return (
+    );
+    upcomingActivities.sort(
+      (a, b) =>
         new Date(`${a.date}T${a.time}`).getTime() -
         new Date(`${b.date}T${b.time}`).getTime()
-      );
-    });
+    );
 
-    // --- AI REKOMENDACJE ---
-    // Wybieramy 3 losowe z puli NADCHODZĄCYCH
-    const shuffledUpcoming = [...upcomingActivities].sort(() => 0.5);
+    const shuffledUpcoming = [...upcomingActivities].sort(
+      // eslint-disable-next-line react-hooks/purity
+      () => 0.5 - Math.random()
+    );
     const recommendedSelection = shuffledUpcoming.slice(0, 3);
     const recommendedIds = new Set(recommendedSelection.map((a) => a.id));
-
-    // Usuwamy rekomendowane z listy ogólnej "Nadchodzące", żeby się nie dublowały
     const finalUpcoming = upcomingActivities.filter(
       (a) => !recommendedIds.has(a.id)
     );
@@ -110,6 +125,7 @@ const MapPage: React.FC = () => {
     };
   }, [visibleActivities]);
 
+  // --- OBSŁUGA UI ---
   const handleRadiusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (val === "custom") {
@@ -120,11 +136,40 @@ const MapPage: React.FC = () => {
     }
   };
 
-  // --- WIDOK MAPY ---
-  if (selectedActivity || isDevMode) {
+  const handleManualLocationSelect = (lat: number, lng: number) => {
+    setManualLocation({ lat, lng });
+    setIsChoosingLocation(false); // Wyłączamy tryb wybierania po kliknięciu
+  };
+
+  const resetLocationToGPS = () => {
+    setManualLocation(null);
+    setIsChoosingLocation(false);
+  };
+
+  // --- RENDEROWANIE: WIDOK MAPY (Single / Dev / Choosing) ---
+  if (selectedActivity || isDevMode || isChoosingLocation) {
     return (
       <div className="relative h-screen w-full bg-gray-100 flex flex-col">
-        {!isDevMode && (
+        {/* Pasek górny w trybie wybierania */}
+        {isChoosingLocation && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white px-6 py-3 rounded-xl shadow-xl flex items-center gap-4 animate-fade-in w-[90%] md:w-auto justify-between">
+            <div className="flex items-center gap-2 text-slate-800 font-bold">
+              <Crosshair className="text-orange-500 animate-pulse" />
+              <span className="text-sm">
+                Kliknij na mapie, aby ustawić środek
+              </span>
+            </div>
+            <button
+              onClick={() => setIsChoosingLocation(false)}
+              className="bg-gray-100 p-1 rounded-full"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        )}
+
+        {/* Przycisk powrotu (jeśli nie wybieramy lokalizacji) */}
+        {!isDevMode && !isChoosingLocation && (
           <div className="absolute top-4 left-4 z-[1000]">
             <button
               onClick={() => setSelectedActivity(null)}
@@ -135,8 +180,8 @@ const MapPage: React.FC = () => {
           </div>
         )}
 
-        {/* ... (reszta widoku mapy bez zmian) ... */}
-        {isDevMode && (
+        {/* Dev Mode Badge */}
+        {isDevMode && !isChoosingLocation && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-red-500 text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse">
             TRYB DEWELOPERSKI
           </div>
@@ -144,7 +189,7 @@ const MapPage: React.FC = () => {
 
         <div className="flex-1">
           <MapView
-            userLocation={CURRENT_USER_LOCATION}
+            userLocation={currentLocation}
             activities={
               isDevMode
                 ? activities
@@ -153,12 +198,17 @@ const MapPage: React.FC = () => {
                 : []
             }
             radius={radius}
-            mode={isDevMode ? "dev" : "single"}
+            // Jeśli wybieramy lokalizację, tryb mapy to 'dev' (widzimy radar), w p.p. 'single'
+            mode={isDevMode || isChoosingLocation ? "dev" : "single"}
             selectedActivity={selectedActivity}
             onSelectActivity={setSelectedActivity}
+            // Nowe propsy
+            isSelectingLocation={isChoosingLocation}
+            onLocationSelect={handleManualLocationSelect}
           />
         </div>
 
+        {/* Wyjście z Dev Mode */}
         {isDevMode && (
           <button
             onClick={() => setDevMode(false)}
@@ -171,18 +221,51 @@ const MapPage: React.FC = () => {
     );
   }
 
-  // --- WIDOK LISTY ---
+  // --- RENDEROWANIE: WIDOK LISTY ---
   return (
     <div className="h-screen w-full bg-gray-50 flex flex-col font-sans overflow-hidden">
-      {/* Header */}
+      {/* HEADER */}
       <header className="flex-none bg-white shadow-sm z-20 px-4 py-4">
-        {/* ... (header bez zmian) ... */}
         <div className="max-w-md mx-auto">
-          <div className="flex items-center gap-2 text-blue-600 mb-3 font-medium text-sm">
-            <MapPin size={16} />
-            <span>Warszawa, Centrum</span>
+          {/* Lokalizacja + Przycisk zmiany */}
+          <div className="flex justify-between items-start mb-3">
+            <div
+              className={`flex items-center gap-2 font-medium text-sm transition-colors ${
+                manualLocation ? "text-orange-600" : "text-blue-600"
+              }`}
+            >
+              <MapPin size={16} />
+              <span className="truncate max-w-[200px]">
+                {manualLocation
+                  ? "Wybrana lokalizacja"
+                  : locationState.error
+                  ? "Warszawa (Domyślna)"
+                  : "Twoja lokalizacja (GPS)"}
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              {/* Reset do GPS (widoczny tylko gdy manualna) */}
+              {manualLocation && (
+                <button
+                  onClick={resetLocationToGPS}
+                  className="text-xs bg-blue-50 text-blue-600 px-2 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-blue-100 transition"
+                >
+                  <RotateCcw size={12} /> GPS
+                </button>
+              )}
+
+              {/* Zmień lokalizację */}
+              <button
+                onClick={() => setIsChoosingLocation(true)}
+                className="text-xs bg-gray-100 text-slate-700 px-2 py-1.5 rounded-lg font-bold hover:bg-gray-200 transition"
+              >
+                Zmień
+              </button>
+            </div>
           </div>
 
+          {/* Radius Selector */}
           <div className="flex gap-3 items-center">
             <label className="text-sm font-bold text-gray-700 whitespace-nowrap">
               Szukaj w:
@@ -219,7 +302,7 @@ const MapPage: React.FC = () => {
         </div>
       </header>
 
-      {/* Content */}
+      {/* CONTENT LIST */}
       <main className="flex-1 overflow-y-auto p-4 scroll-smooth">
         <div className="max-w-md mx-auto pb-20 space-y-8">
           {recommended.length === 0 &&
@@ -241,7 +324,6 @@ const MapPage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* SEKCJA 1: PROPONOWANE */}
               {recommended.length > 0 && (
                 <section>
                   <div className="flex items-center gap-2 mb-3">
@@ -263,7 +345,6 @@ const MapPage: React.FC = () => {
                 </section>
               )}
 
-              {/* SEKCJA 2: LIVE (Started & Not Ended) */}
               {live.length > 0 && (
                 <section>
                   <div className="flex items-center gap-2 mb-3">
@@ -287,7 +368,6 @@ const MapPage: React.FC = () => {
                 </section>
               )}
 
-              {/* SEKCJA 3: NADCHODZĄCE (Not Started & Not Ended) */}
               {upcoming.length > 0 && (
                 <section>
                   <div className="flex items-center gap-2 mb-3">
@@ -312,7 +392,7 @@ const MapPage: React.FC = () => {
         </div>
       </main>
 
-      {/* (Dev button bez zmian) */}
+      {/* Dev Button */}
       <div className="fixed bottom-4 right-4 z-50">
         <button
           onClick={() => setDevMode(true)}

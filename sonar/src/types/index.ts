@@ -4,8 +4,16 @@ export interface Activity {
   lng: number;
   title: string;
   desc: string;
-  type: "Sport" | "Nauka" | "Relaks" | "Inne";
+  type:
+    | "Edukacja i rozwój"
+    | "Sport i aktywność fizyczna"
+    | "Zdrowie i lifestyle"
+    | "Kultura i rozrywka"
+    | "Społeczność i networking"
+    | "Kariera i biznes"
+    | "Technologie i innowacje";
   author: string;
+  authorId: string;
   acceptedParticipants: string[];
   pendingParticipants: string[];
   date: string; // YYYY-MM-DD
