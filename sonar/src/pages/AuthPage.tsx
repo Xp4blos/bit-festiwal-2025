@@ -9,7 +9,15 @@ export default function AuthPage() {
     e.preventDefault();
     // TODO: Implementacja logiki autoryzacji
     localStorage.setItem('isAuthenticated', 'true');
-    // Sprawdź czy użytkownik wypełnił ankietę
+    
+    // Przy rejestracji zawsze kieruj do ankiety
+    if (!isLogin) {
+      localStorage.removeItem('surveyCompleted'); // Usuń poprzednie dane ankiety jeśli istnieją
+      navigate('/survey');
+      return;
+    }
+    
+    // Przy logowaniu sprawdź czy użytkownik wypełnił ankietę
     const surveyCompleted = localStorage.getItem('surveyCompleted');
     navigate(surveyCompleted ? '/dashboard' : '/survey');
   };

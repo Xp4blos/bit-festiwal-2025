@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Map, LogOut, BarChart3, Users, Calendar, TrendingUp } from 'lucide-react';
-import { sendPromptToGemini, analyzeMatchWithAI } from '../services/aiService';
+import { Map, LogOut, BarChart3, Users, Calendar, TrendingUp, Sparkles } from 'lucide-react';
+import { getSuggestedActivities } from '../services/aiService';
+import type { SuggestedActivity } from '../types';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
-  const [aiResponse, setAiResponse] = useState<string>('');
+  const [suggestedActivities, setSuggestedActivities] = useState<SuggestedActivity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 //   const [todos, setTodos] = useState<any[]>([]);
 
@@ -24,6 +25,20 @@ export default function DashboardPage() {
 //     fetchTodos();
 //   }, []);
 
+
+  const handleSuggestActivities = async () => {
+    setIsLoading(true);
+    try {
+      const activities = await getSuggestedActivities();
+      setSuggestedActivities(activities);
+      console.log('Loaded suggested activities:', activities);
+    } catch (error) {
+      console.error('Error loading suggested activities:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
     navigate('/auth');
@@ -35,29 +50,6 @@ export default function DashboardPage() {
     { label: 'Odwiedziny', value: '1.2k', icon: TrendingUp, color: 'bg-purple-500' },
     { label: 'Lokalizacje', value: '8', icon: Map, color: 'bg-orange-500' },
   ];
-
-  const handleGeminiTest = async () => {
-    setIsLoading(true);
-    try {
-      // Prosty test - wysłanie promptu
-      const response = await sendPromptToGemini("Napisz krótką wiadomość powitalną dla użytkownika aplikacji społecznościowej.");
-      setAiResponse(response);
-      console.log("Gemini response:", response);
-
-      // Test analizy dopasowania
-      const analysis = await analyzeMatchWithAI(
-        ["sport", "programowanie", "muzyka"],
-        "Hackathon programistyczny z elementami gamifikacji",
-        "Tech Event"
-      );
-      console.log("Match analysis:", analysis);
-    } catch (error) {
-      console.error("Error:", error);
-      setAiResponse(`Błąd: ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -131,25 +123,88 @@ export default function DashboardPage() {
           </button>
 
           <button 
-            className="bg-white rounded-xl shadow-md p-8 hover:shadow-lg transition-all hover:scale-105 group disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleGeminiTest}
-            disabled={isLoading}
+            className="bg-white rounded-xl shadow-md p-8 hover:shadow-lg transition-all hover:scale-105 group"
+            onClick={() => navigate('/survey')}
           >
             <div className="flex items-center gap-4">
               <div className="bg-green-500 p-4 rounded-lg group-hover:bg-green-600 transition-colors">
-                <BarChart3 className="text-white" size={32} />
+                <Sparkles className="text-white" size={32} />
               </div>
               <div className="text-left">
-                <h3 className="text-xl font-bold text-gray-900 mb-1">
-                  {isLoading ? 'Testowanie...' : 'Test Gemini AI'}
-                </h3>
-                <p className="text-gray-600">
-                  {aiResponse ? aiResponse.substring(0, 50) + '...' : 'Kliknij aby przetestować API'}
-                </p>
+                <h3 className="text-xl font-bold text-gray-900 mb-1">Wypełnij ankietę</h3>
+                <p className="text-gray-600">Zaktualizuj swoje preferencje i zainteresowania</p>
               </div>
             </div>
           </button>
 
+        </div>
+
+        {/* Suggested Activities */}
+
+        <div className="mt-8 bg-white rounded-xl shadow-md p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="text-indigo-600" size={24} />
+            <h2 className="text-xl font-bold text-gray-900">Sugerowane dla Ciebie</h2>
+            <button
+              onClick={handleSuggestActivities}
+              className="ml-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Ładowanie...' : 'Pokaż sugerowane aktywności'}
+            </button>
+          </div>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : suggestedActivities.length > 0 ? (
+            <div className="space-y-4">
+              {suggestedActivities.map((activity) => (
+                <div
+                  key={activity.id}
+                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => navigate('/map')}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-gray-900 mb-1">{activity.title}</h3>
+                      <p className="text-sm text-gray-600 mb-2">{activity.desc}</p>
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+                          {activity.type}
+                        </span>
+                        <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">
+                          {activity.date} {activity.time}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="ml-4 text-right">
+                      <div className="text-2xl font-bold text-indigo-600">{activity.score}</div>
+                      <div className="text-xs text-gray-500">dopasowanie</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <p className="text-sm text-gray-700 mb-2">
+                      <span className="font-semibold">Powód:</span> {activity.reason}
+                    </p>
+                    <p className="text-sm text-indigo-600 italic">
+                      💬 {activity.icebreaker}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>Brak sugerowanych aktywności. Wypełnij ankietę, aby otrzymać personalizowane rekomendacje!</p>
+              <button
+                onClick={() => navigate('/survey')}
+                className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                Wypełnij ankietę
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}
