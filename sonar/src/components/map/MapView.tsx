@@ -1,17 +1,44 @@
 import React from "react";
-import { MapContainer, TileLayer, Marker, Circle, Popup } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Circle,
+  Popup,
+  useMapEvents,
+} from "react-leaflet";
 import { Navigation } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { Activity, Location } from "../../types";
+
+// --- KOMPONENT POMOCNICZY DO KLIKANIA ---
+const LocationSelector = ({
+  onSelect,
+  isActive,
+}: {
+  onSelect: (lat: number, lng: number) => void;
+  isActive: boolean;
+}) => {
+  useMapEvents({
+    click(e) {
+      if (isActive) {
+        onSelect(e.latlng.lat, e.latlng.lng);
+      }
+    },
+  });
+  return null;
+};
 
 interface MapViewProps {
   userLocation: Location;
   activities: Activity[];
   onSelectActivity: (activity: Activity) => void;
-  // Nowe propsy
   radius: number;
-  mode: "single" | "dev"; // Tryb działania mapy
+  mode: "single" | "dev";
   selectedActivity: Activity | null;
+  // Nowe propsy do wybierania lokalizacji
+  isSelectingLocation?: boolean;
+  onLocationSelect?: (lat: number, lng: number) => void;
 }
 
 const MapView: React.FC<MapViewProps> = ({
@@ -21,25 +48,28 @@ const MapView: React.FC<MapViewProps> = ({
   radius,
   mode,
   selectedActivity,
+  isSelectingLocation = false,
+  onLocationSelect,
 }) => {
-  // Funkcja generująca link do Google Maps
   const handleOpenGoogleMaps = (targetLat: number, targetLng: number) => {
     const url = `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${targetLat},${targetLng}&travelmode=walking`;
     window.open(url, "_blank");
   };
 
-  // Ustalanie środka mapy
-  // Jeśli mamy wybraną aktywność (tryb single), centrujemy na niej, w przeciwnym razie na userze
   const mapCenter: [number, number] =
     mode === "single" && selectedActivity
       ? [selectedActivity.lat, selectedActivity.lng]
       : [userLocation.lat, userLocation.lng];
 
   return (
-    <div className="w-full h-full relative">
+    <div
+      className={`w-full h-full relative ${
+        isSelectingLocation ? "cursor-crosshair" : ""
+      }`}
+    >
       <MapContainer
         center={mapCenter}
-        zoom={mode === "single" ? 16 : 14} // Bliższy zoom dla pojedynczej aktywności
+        zoom={mode === "single" ? 16 : 14}
         scrollWheelZoom={true}
         zoomControl={false}
         className="w-full h-full outline-none"
@@ -49,14 +79,22 @@ const MapView: React.FC<MapViewProps> = ({
           url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png"
         />
 
-        {/* --- TRYB DEV: Pokaż zasięg radaru --- */}
+        {/* Obsługa kliknięcia w mapę */}
+        {onLocationSelect && (
+          <LocationSelector
+            onSelect={onLocationSelect}
+            isActive={isSelectingLocation}
+          />
+        )}
+
+        {/* --- RADAR (Zasięg) --- */}
         {mode === "dev" && (
           <Circle
             center={[userLocation.lat, userLocation.lng]}
-            radius={radius * 1000} // radius jest w km, Leaflet chce metry
+            radius={radius * 1000}
             pathOptions={{
-              color: "#3b82f6",
-              fillColor: "#3b82f6",
+              color: isSelectingLocation ? "#f59e0b" : "#3b82f6", // Pomarańczowy przy wyborze
+              fillColor: isSelectingLocation ? "#f59e0b" : "#3b82f6",
               fillOpacity: 0.05,
               weight: 1,
               dashArray: "5, 10",
@@ -64,21 +102,23 @@ const MapView: React.FC<MapViewProps> = ({
           />
         )}
 
-        {/* --- ZAWSZE: Pozycja Użytkownika --- */}
+        {/* --- POZYCJA UŻYTKOWNIKA (Środek Radaru) --- */}
         <Circle
           center={[userLocation.lat, userLocation.lng]}
-          radius={mode === "single" ? 10 : 30} // Mniejsza kropka w trybie nawigacji
+          radius={mode === "single" ? 10 : 30}
           pathOptions={{
-            color: "#10b981", // Zielony dla usera w trybie nawigacji
-            fillColor: "#10b981",
+            color: "white",
+            fillColor: isSelectingLocation ? "#f59e0b" : "#10b981", // Pomarańczowy przy wyborze
             fillOpacity: 0.8,
             weight: 2,
           }}
         >
-          <Popup>To Ty</Popup>
+          <Popup>
+            {isSelectingLocation ? "Nowy środek radaru" : "Twój radar"}
+          </Popup>
         </Circle>
 
-        {/* --- MARKERY --- */}
+        {/* --- MARKERY AKTYWNOŚCI --- */}
         {activities.map((activity) => (
           <Marker
             key={activity.id}
@@ -87,7 +127,6 @@ const MapView: React.FC<MapViewProps> = ({
               click: () => onSelectActivity(activity),
             }}
           >
-            {/* W trybie single od razu pokazujemy dymek lub custom UI */}
             {mode === "single" && (
               <Popup autoPan={false}>
                 <span className="font-bold">{activity.title}</span>
@@ -97,7 +136,7 @@ const MapView: React.FC<MapViewProps> = ({
         ))}
       </MapContainer>
 
-      {/* --- UI OVERLAY dla Trybu SINGLE --- */}
+      {/* Przycisk nawigacji (tylko single mode) */}
       {mode === "single" && selectedActivity && (
         <div className="absolute bottom-8 left-0 right-0 px-4 z-[500] flex justify-center">
           <button
