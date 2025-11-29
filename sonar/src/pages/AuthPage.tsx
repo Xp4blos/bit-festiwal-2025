@@ -8,9 +8,10 @@ export default function AuthPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: Implementacja logiki autoryzacji
-    // Tymczasowo przechodzimy od razu do dashboardu
     localStorage.setItem('isAuthenticated', 'true');
-    navigate('/dashboard');
+    // Sprawdź czy użytkownik wypełnił ankietę
+    const surveyCompleted = localStorage.getItem('surveyCompleted');
+    navigate(surveyCompleted ? '/dashboard' : '/survey');
   };
 
   return (
