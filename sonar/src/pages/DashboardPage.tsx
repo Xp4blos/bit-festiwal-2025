@@ -1,9 +1,28 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Map, LogOut, BarChart3, Users, Calendar, TrendingUp } from 'lucide-react';
+import { sendPromptToGemini, analyzeMatchWithAI } from '../services/aiService';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const [aiResponse, setAiResponse] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
+//   const [todos, setTodos] = useState<any[]>([]);
+
+//   useEffect(() => {
+//     const fetchTodos = async () => {
+//       try {
+//         const response = await fetch('https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/todos');
+//         const data = await response.json();
+//         setTodos(data);
+//         console.log('Fetched todos:', data);
+//       } catch (error) {
+//         console.error('Error fetching todos:', error);
+//       }
+//     };
+
+//     fetchTodos();
+//   }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('isAuthenticated');
@@ -16,6 +35,29 @@ export default function DashboardPage() {
     { label: 'Odwiedziny', value: '1.2k', icon: TrendingUp, color: 'bg-purple-500' },
     { label: 'Lokalizacje', value: '8', icon: Map, color: 'bg-orange-500' },
   ];
+
+  const handleGeminiTest = async () => {
+    setIsLoading(true);
+    try {
+      // Prosty test - wysłanie promptu
+      const response = await sendPromptToGemini("Napisz krótką wiadomość powitalną dla użytkownika aplikacji społecznościowej.");
+      setAiResponse(response);
+      console.log("Gemini response:", response);
+
+      // Test analizy dopasowania
+      const analysis = await analyzeMatchWithAI(
+        ["sport", "programowanie", "muzyka"],
+        "Hackathon programistyczny z elementami gamifikacji",
+        "Tech Event"
+      );
+      console.log("Match analysis:", analysis);
+    } catch (error) {
+      console.error("Error:", error);
+      setAiResponse(`Błąd: ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -57,6 +99,8 @@ export default function DashboardPage() {
           ))}
         </div>
 
+
+
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <button
@@ -85,6 +129,27 @@ export default function DashboardPage() {
               </div>
             </div>
           </button>
+
+          <button 
+            className="bg-white rounded-xl shadow-md p-8 hover:shadow-lg transition-all hover:scale-105 group disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={handleGeminiTest}
+            disabled={isLoading}
+          >
+            <div className="flex items-center gap-4">
+              <div className="bg-green-500 p-4 rounded-lg group-hover:bg-green-600 transition-colors">
+                <BarChart3 className="text-white" size={32} />
+              </div>
+              <div className="text-left">
+                <h3 className="text-xl font-bold text-gray-900 mb-1">
+                  {isLoading ? 'Testowanie...' : 'Test Gemini AI'}
+                </h3>
+                <p className="text-gray-600">
+                  {aiResponse ? aiResponse.substring(0, 50) + '...' : 'Kliknij aby przetestować API'}
+                </p>
+              </div>
+            </div>
+          </button>
+
         </div>
 
         {/* Recent Activity */}

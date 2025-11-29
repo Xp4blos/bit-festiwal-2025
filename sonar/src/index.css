@@ -3,12 +3,15 @@
 @tailwind utilities;
 @import "tailwindcss";
 html,
-body,
-#root {
+body {
   height: 100%;
   width: 100%;
   margin: 0;
-  overflow: hidden; /* Zapobiega scrollowaniu całej strony */
+}
+
+#root {
+  height: 100%;
+  width: 100%;
 }
 
 .leaflet-container {

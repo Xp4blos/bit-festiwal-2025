@@ -1,10 +1,11 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import AuthPage from "./pages/AuthPage";
-import DashboardPage from "./pages/DashboardPage";
-import MapPage from "./pages/MapPage";
-import ProtectedRoute from "./components/ProtectedRoute";
-import { setupLeafletIcons } from "./utils/leafletSetup";
-import "./App.css";
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import AuthPage from './pages/AuthPage';
+import SurveyPage from './pages/SurveyPage';
+import DashboardPage from './pages/DashboardPage';
+import MapPage from './pages/MapPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import { setupLeafletIcons } from './utils/leafletSetup';
+import './App.css';
 
 // Inicjalizacja ikon Leafleta
 setupLeafletIcons();
@@ -14,6 +15,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route
+          path="/survey"
+          element={
+            <ProtectedRoute>
+              <SurveyPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/dashboard"
           element={
