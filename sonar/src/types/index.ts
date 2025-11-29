@@ -20,6 +20,12 @@ export interface Activity {
   time: string; // HH:MM
   isEnded: boolean; // ZMIANA: true (1) jeśli zakończone, false (0) jeśli trwa lub nadchodzi
 }
+
+export interface SuggestedActivity extends Activity {
+  score: number;
+  reason: string;
+  icebreaker: string;
+}
 export interface Location {
   lat: number;
   lng: number;
