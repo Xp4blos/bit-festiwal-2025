@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@import "tailwindcss";
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: hidden; /* Zapobiega scrollowaniu całej strony */
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background-color: #f3f4f6;
+}
+
+/* Ukrycie paska scrolla */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
