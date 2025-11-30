@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { AIAnalysisResult, Activity, SuggestedActivity } from "../types";
-import { INITIAL_ACTIVITIES } from "../data/mockData";
+import type { AIAnalysisResult, SuggestedActivity, Activity } from "../types";
+// Usuwamy import INITIAL_ACTIVITIES, ponieważ pobieramy dane z API
+// import { INITIAL_ACTIVITIES } from "../data/mockData";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
@@ -19,7 +20,7 @@ export async function sendPromptToGemini(prompt: string): Promise<string> {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
     const result = await model.generateContent(prompt);
     const response = await result.response;
     return response.text();
@@ -30,7 +31,7 @@ export async function sendPromptToGemini(prompt: string): Promise<string> {
 }
 
 /**
- * Analizuje dopasowanie użytkownika do aktywności za pomocą Gemini
+ * Analizuje dopasowanie użytkownika do aktywności za pomocą Gemini (pojedyncze dopasowanie)
  */
 export async function analyzeMatchWithAI(
   userInterests: string[],
@@ -40,9 +41,7 @@ export async function analyzeMatchWithAI(
   const prompt = `
 Jesteś asystentem AI, który pomaga użytkownikom znaleźć odpowiednie wydarzenia społeczne.
 
-Użytkownik wypełnił ankietę a wyniki prezentują się następująco:
-${activityDesc}
-Zainteresowania użytkownika: ${userInterests.join(", ")}
+Użytkownik wypełnił ankietę: ${userInterests.join(", ")}
 Typ wydarzenia: ${activityType}
 Opis wydarzenia: ${activityDesc}
 
@@ -61,151 +60,184 @@ Odpowiedz w formacie JSON:
 
   try {
     const response = await sendPromptToGemini(prompt);
-    // Usuń markdown formatting jeśli istnieje
-    const jsonText = response.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+    const jsonText = response
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
     const result = JSON.parse(jsonText);
     return result as AIAnalysisResult;
   } catch (error) {
     console.error("Error parsing AI response:", error);
-    // Fallback do mock data
     return mockAnalyzeMatch(userInterests, activityDesc);
   }
 }
 
 /**
- * Sugeruje 5 najlepszych aktywności na podstawie wypełnionej ankiety użytkownika
+ * Sugeruje 5 najlepszych aktywności na podstawie ankiety użytkownika i AKTUALNYCH wydarzeń z API
  */
-export async function getSuggestedActivities(userId?: number): Promise<SuggestedActivity[]> {
+export async function getSuggestedActivities(
+  userId?: number
+): Promise<SuggestedActivity[]> {
+  // Zmienna przechowująca pobrane aktywności, aby użyć ich w fallbacku w razie błędu AI
+  let fetchedActivities: Activity[] = [];
+
   try {
     if (!userId) {
-      console.warn('User ID not provided');
+      console.warn("User ID not provided");
       return [];
     }
 
-    // Pobierz dane użytkownika z API
+    // 1. Pobierz dane użytkownika (preferencje)
     const userResponse = await fetch(
       `https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Users/${userId}`
     );
 
     if (!userResponse.ok) {
-      console.error('Failed to fetch user data');
+      console.error("Failed to fetch user data");
       return [];
     }
 
     const userData = await userResponse.json();
     const surveyAnswersString = userData.preferencje;
 
-    if (!surveyAnswersString || surveyAnswersString.trim() === '') {
-      console.warn('No preferences found for user');
+    if (!surveyAnswersString || surveyAnswersString.trim() === "") {
+      console.warn("No preferences found for user");
       return [];
     }
 
-    console.log('User preferences from API:', surveyAnswersString);
+    console.log("User preferences from API:", surveyAnswersString);
 
-    // Przygotuj prompt z danymi aktywności
-    const activitiesData = INITIAL_ACTIVITIES.map(activity => ({
+    // 2. Pobierz wszystkie dostępne wydarzenia z API
+    const eventsResponse = await fetch(
+      "https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Events"
+    );
+
+    if (!eventsResponse.ok) {
+      console.error("Failed to fetch events data");
+      return [];
+    }
+
+    const rawEvents = await eventsResponse.json();
+
+    // Mapowanie danych z API na format Activity (naprawa dat i typów)
+    fetchedActivities = rawEvents.map((item: any) => ({
+      ...item,
+      // Naprawa formatu godziny jeśli brakuje daty w stringu
+      godzina: item.godzina.includes("T")
+        ? item.godzina
+        : `${item.data}T${item.godzina}`,
+      szerokosc: Number(item.szerokosc),
+      wysokosc: Number(item.wysokosc),
+    }));
+
+    // Filtrujemy tylko niezakończone wydarzenia
+    const activeActivities = fetchedActivities.filter((a) => !a.zakonczone);
+
+    // Jeśli mało wydarzeń, nie pytamy AI, tylko zwracamy co jest
+    if (activeActivities.length === 0) return [];
+
+    // 3. Przygotuj uproszczone dane dla Promptu (oszczędność tokenów)
+    const activitiesData = activeActivities.map((activity) => ({
       id: activity.id,
-      title: activity.title,
-      desc: activity.desc,
-      type: activity.type,
-      author: activity.author,
-      date: activity.date,
-      time: activity.time
+      title: activity.nazwa,
+      desc: activity.opis,
+      type: activity.typ,
+      date: activity.data,
+      time: activity.godzina,
     }));
 
     const prompt = `
-Jesteś asystentem AI, który pomaga użytkownikom znaleźć najlepsze wydarzenia społeczne.
+Jesteś asystentem AI. Pomóż użytkownikowi znaleźć najlepsze wydarzenia.
 
-Preferencje użytkownika z ankiety:
+Preferencje użytkownika:
 ${surveyAnswersString}
 
-Dostępne wydarzenia:
-${JSON.stringify(activitiesData, null, 2)}
+Dostępne wydarzenia (JSON):
+${JSON.stringify(activitiesData)}
 
-Na podstawie powyższych informacji wybierz 5 najlepszych wydarzeń dla tego użytkownika.
-Dla każdego wydarzenia:
-1. Oceń dopasowanie w skali 0-100
-2. Podaj krótki powód (max 60 znaków)
-3. Zasugeruj icebreaker - wiadomość startową (max 100 znaków)
+Zadanie:
+Wybierz maksymalnie 5 wydarzeń, które najlepiej pasują do preferencji.
+Dla każdego zwróć obiekt JSON.
 
-Odpowiedz w formacie JSON (tylko surowy JSON, bez markdown):
+Format odpowiedzi (tylko czysta tablica JSON, bez markdown):
 [
   {
     "id": <id wydarzenia>,
     "score": <liczba 0-100>,
-    "reason": "<krótki powód>",
-    "icebreaker": "<wiadomość startowa>"
+    "reason": "<krótki powód dlaczego pasuje>",
+    "icebreaker": "<luźne zdanie na powitanie>"
   }
 ]
-
-Wybierz 5 wydarzeń z najwyższym dopasowaniem.
 `;
 
+    // 4. Zapytanie do Gemini
     const response = await sendPromptToGemini(prompt);
-    // Usuń markdown formatting jeśli istnieje
-    const jsonText = response.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const suggestions = JSON.parse(jsonText);
 
-    // Połącz z pełnymi danymi aktywności
-    const suggestedActivities: SuggestedActivity[] = suggestions.map((suggestion: any) => {
-      const activity = INITIAL_ACTIVITIES.find(a => a.id === suggestion.id);
-      if (!activity) return null;
+    // Czyszczenie odpowiedzi
+    const jsonText = response
+      .replace(/```json\n?/g, "")
+      .replace(/```\n?/g, "")
+      .trim();
 
-      return {
-        ...activity,
-        score: suggestion.score,
-        reason: suggestion.reason,
-        icebreaker: suggestion.icebreaker
-      };
-    }).filter(Boolean);
+    type Suggestion = {
+      id: number;
+      score: number;
+      reason: string;
+      icebreaker: string;
+    };
+    const suggestions: Suggestion[] = JSON.parse(jsonText) as Suggestion[];
 
-    console.log('Suggested activities:', suggestedActivities);
-    return suggestedActivities;
+    // 5. Łączenie sugestii AI z pełnymi danymi aktywności
+    const result: SuggestedActivity[] = suggestions
+      .map((suggestion) => {
+        const activity = fetchedActivities.find((a) => a.id === suggestion.id);
+        if (!activity) return null;
+
+        return {
+          ...activity,
+          score: suggestion.score,
+          reason: suggestion.reason,
+          icebreaker: suggestion.icebreaker,
+        };
+      })
+      .filter((x): x is SuggestedActivity => Boolean(x));
+
+    console.log("AI Suggested activities:", result);
+    return result;
   } catch (error) {
-    console.error('Error getting suggested activities:', error);
-    // Fallback - zwróć 5 losowych aktywności
-    return INITIAL_ACTIVITIES
-      .slice(0, 5)
-      .map(activity => ({
+    console.error("Error getting suggested activities (AI fail):", error);
+
+    // Fallback: Jeśli AI zawiedzie, ale mamy dane z API, zwróć 5 losowych wydarzeń
+    if (fetchedActivities.length > 0) {
+      console.log("Using fallback: Random API activities");
+      const active = fetchedActivities.filter((a) => !a.zakonczone);
+      const shuffled = active.sort(() => 0.5 - Math.random()).slice(0, 5);
+
+      return shuffled.map((activity) => ({
         ...activity,
-        score: Math.floor(Math.random() * 40 + 60),
-        reason: "Może Cię zainteresować",
-        icebreaker: `Cześć! Biorę udział w "${activity.title}". Dołączysz?`
+        score: Math.floor(Math.random() * 20 + 60), // Losowy score 60-80
+        reason: "Polecane wydarzenie w Twojej okolicy",
+        icebreaker: `Cześć! Wybierasz się na "${activity.nazwa}"?`,
       }));
+    }
+
+    return [];
   }
 }
 
 /**
- * Mock funkcja (fallback)
+ * Mock funkcja (używana tylko w analyzeMatchWithAI jako fallback)
  */
 export const mockAnalyzeMatch = (
   userInterests: string[],
   activityDesc: string
 ): AIAnalysisResult => {
-  const keywords = [
-    "sport",
-    "kodowanie",
-    "piłka",
-    "bieganie",
-    "hackathon",
-    "react",
-  ];
-  const hasKeyword = keywords.some((k) =>
-    activityDesc.toLowerCase().includes(k)
-  );
-
-  const score = hasKeyword
-    ? Math.floor(Math.random() * (99 - 75) + 75)
-    : Math.floor(Math.random() * (60 - 30) + 30);
+  const keywords = ["sport", "kodowanie", "muzyka", "taniec", "książka"];
+  const score = Math.floor(Math.random() * (90 - 40) + 40);
 
   return {
     score,
-    reason: hasKeyword
-      ? "Wysoka zgodność zainteresowań!"
-      : "Nowe doświadczenie dla Ciebie.",
-    icebreaker: `Hej! Widzę, że działasz w temacie: "${activityDesc.substring(
-      0,
-      15
-    )}...". Jest jeszcze miejsce?`,
+    reason: "Analiza offline (brak połączenia z AI)",
+    icebreaker: "Hej, wygląda na ciekawe wydarzenie!",
   };
 };

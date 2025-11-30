@@ -1,263 +1,449 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Map, LogOut, BarChart3, Users, Calendar, TrendingUp, Sparkles } from 'lucide-react';
-import { getSuggestedActivities } from '../services/aiService';
-import { useAuth } from '../context/AuthContext';
-import type { SuggestedActivity } from '../types';
+import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  LogOut,
+  Calendar,
+  CheckCircle2,
+  Hourglass,
+  History,
+  Sparkles,
+  MapPin,
+  ArrowRight,
+  Navigation,
+  Loader2,
+  Map as MapIcon,
+  Search,
+  ShieldCheck, // Ikona dla sekcji Administratora
+} from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useActivities } from "../context/ActivityContext";
+import type { Activity } from "../types";
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [suggestedActivities, setSuggestedActivities] = useState<SuggestedActivity[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [todos, setTodos] = useState<any[]>([]);
 
-useEffect(() => {
-  const fetchUser = async () => {
-    try {
-      const response = await fetch('https://kokos-api.grayflower-7f624026.polandcentral.azurecontainerapps.io/api/Users/10', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          login: 'twojLogin',
-          preferencje: 'twojePreferencje'
-        }),
+  const {
+    activities: allActivities,
+    suggestedActivities,
+    isLoading,
+    refreshSuggestions,
+  } = useActivities();
+
+  // --- FILTROWANIE ---
+  const { createdEvents, confirmedEvents, pendingEvents, historyEvents } =
+    useMemo(() => {
+      if (!user)
+        return {
+          createdEvents: [],
+          confirmedEvents: [],
+          pendingEvents: [],
+          historyEvents: [],
+        };
+
+      const created: Activity[] = [];
+      const confirmed: Activity[] = [];
+      const pending: Activity[] = [];
+      const history: Activity[] = [];
+
+      allActivities.forEach((act) => {
+        // 1. Czy to moje wydarzenie?
+        if (act.organizator.id === user.id) {
+          if (act.zakonczone) {
+            history.push(act);
+          } else {
+            created.push(act);
+          }
+          return; // Jeśli jestem twórcą, nie sprawdzamy już czy uczestniczę
+        }
+
+        // 2. Jeśli nie moje, to czy uczestniczę?
+        const participation = act.uczestnicy.find((u) => u.id === user.id);
+
+        if (participation) {
+          if (act.zakonczone) {
+            history.push(act);
+          } else {
+            if (participation.potwierdzony) {
+              confirmed.push(act);
+            } else {
+              pending.push(act);
+            }
+          }
+        }
       });
 
-      const text = await response.text();
-      if (text) {
-        const data = JSON.parse(text);
-        setTodos(data);
-        console.log('Fetched user:', data);
-      } else {
-        setTodos([]);
-        console.log('No content returned from API');
-      }
-    } catch (error) {
-      console.error('Error fetching user:', error);
-    }
-  };
+      const sortByDate = (a: Activity, b: Activity) =>
+        new Date(a.godzina).getTime() - new Date(b.godzina).getTime();
 
-  fetchUser();
-}, []);
+      const sortByDateDesc = (a: Activity, b: Activity) =>
+        new Date(b.godzina).getTime() - new Date(a.godzina).getTime();
 
+      return {
+        createdEvents: created.sort(sortByDate),
+        confirmedEvents: confirmed.sort(sortByDate),
+        pendingEvents: pending.sort(sortByDate),
+        historyEvents: history.sort(sortByDateDesc),
+      };
+    }, [allActivities, user]);
 
-  const handleSuggestActivities = async () => {
-    setIsLoading(true);
-    try {
-      const activities = await getSuggestedActivities(user?.id);
-      setSuggestedActivities(activities);
-      console.log('Loaded suggested activities:', activities);
-    } catch (error) {
-      console.error('Error loading suggested activities:', error);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleOpenGoogleMaps = (lat: number, lng: number) => {
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking`;
+    window.open(url, "_blank");
   };
 
   const handleLogout = () => {
     logout();
-    navigate('/auth');
+    navigate("/auth");
   };
 
-  const stats = [
-    { label: 'Aktywne Wydarzenia', value: '12', icon: Calendar, color: 'bg-blue-500' },
-    { label: 'Uczestnicy', value: '248', icon: Users, color: 'bg-green-500' },
-    { label: 'Odwiedziny', value: '1.2k', icon: TrendingUp, color: 'bg-purple-500' },
-    { label: 'Lokalizacje', value: '8', icon: Map, color: 'bg-orange-500' },
-  ];
+  const formatDateTime = (isoString: string) => {
+    const date = new Date(isoString);
+    return date.toLocaleString("pl-PL", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  if (isLoading && allActivities.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="animate-spin text-blue-600 w-10 h-10" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+    <div className="min-h-screen bg-gray-50 font-sans pb-20">
+      <header className="bg-white shadow-sm border-b sticky top-0 z-20">
+        <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-              {user && <p className="text-sm text-gray-600 mt-1">Zalogowany jako: <span className="font-semibold">{user.login}</span></p>}
+              <h1 className="text-2xl font-black text-gray-900">Dashboard</h1>
+              {user && (
+                <p className="text-sm text-gray-500 mt-1">
+                  Witaj,{" "}
+                  <span className="font-bold text-blue-600">{user.login}</span>!
+                </p>
+              )}
             </div>
             <button
               onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors font-medium text-sm"
             >
-              <LogOut size={20} />
-              <span>Wyloguj</span>
+              <LogOut size={18} />
+              Wyloguj
             </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 mb-1">{stat.label}</p>
-                  <p className="text-3xl font-bold text-gray-900">{stat.value}</p>
-                </div>
-                <div className={`${stat.color} p-3 rounded-lg`}>
-                  <stat.icon className="text-white" size={24} />
-                </div>
+      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+        {/* Przycisk Mapy */}
+        <button
+          onClick={() => navigate("/map")}
+          className="w-full bg-slate-900 hover:bg-slate-800 text-white p-6 rounded-3xl shadow-xl shadow-slate-200 transition-all transform hover:-translate-y-1 flex items-center justify-between group"
+        >
+          <div className="flex items-center gap-4">
+            <div className="bg-slate-800 p-3 rounded-2xl group-hover:bg-slate-700 transition">
+              <Search size={32} className="text-blue-400" />
+            </div>
+            <div className="text-left">
+              <h2 className="text-xl font-bold">Przeglądaj Aktywności</h2>
+              <p className="text-slate-400 text-sm">
+                Otwórz mapę i znajdź wydarzenia
+              </p>
+            </div>
+          </div>
+          <div className="bg-white/10 p-2 rounded-full">
+            <ArrowRight size={24} />
+          </div>
+        </button>
+
+        {/* STATYSTYKI */}
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-red-50 p-3 rounded-xl text-red-600">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Utworzone</p>
+              <p className="text-2xl font-black text-gray-800">
+                {createdEvents.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-yellow-50 p-3 rounded-xl text-yellow-600">
+              <Hourglass size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Oczekiwanie</p>
+              <p className="text-2xl font-black text-gray-800">
+                {pendingEvents.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-green-50 p-3 rounded-xl text-green-600">
+              <CheckCircle2 size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Dołączono</p>
+              <p className="text-2xl font-black text-gray-800">
+                {confirmedEvents.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
+            <div className="bg-gray-100 p-3 rounded-xl text-gray-600">
+              <History size={24} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Historia</p>
+              <p className="text-2xl font-black text-gray-800">
+                {historyEvents.length}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* AI SUGESTIE */}
+        <section className="bg-indigo-50/50 rounded-3xl border border-indigo-100 p-6 md:p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-200">
+                <Sparkles className="text-white" size={20} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  Rekomendacje Sonar AI
+                </h2>
+                <p className="text-xs text-indigo-600 font-medium">
+                  Na podstawie Twoich preferencji
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-
-
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <button
-            onClick={() => navigate('/map')}
-            className="bg-white rounded-xl shadow-md p-8 hover:shadow-lg transition-all hover:scale-105 group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="bg-blue-500 p-4 rounded-lg group-hover:bg-blue-600 transition-colors">
-                <Map className="text-white" size={32} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-xl font-bold text-gray-900 mb-1">Mapa Wydarzeń</h3>
-                <p className="text-gray-600">Przejdź do interaktywnej mapy z aktywnościami</p>
-              </div>
-            </div>
-          </button>
-
-          <button className="bg-white rounded-xl shadow-md p-8 hover:shadow-lg transition-all hover:scale-105 group">
-            <div className="flex items-center gap-4">
-              <div className="bg-purple-500 p-4 rounded-lg group-hover:bg-purple-600 transition-colors">
-                <BarChart3 className="text-white" size={32} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-xl font-bold text-gray-900 mb-1">Statystyki</h3>
-                <p className="text-gray-600">Zobacz szczegółowe analizy i raporty</p>
-              </div>
-            </div>
-          </button>
-
-          <button 
-            className="bg-white rounded-xl shadow-md p-8 hover:shadow-lg transition-all hover:scale-105 group"
-            onClick={() => navigate('/survey')}
-          >
-            <div className="flex items-center gap-4">
-              <div className="bg-green-500 p-4 rounded-lg group-hover:bg-green-600 transition-colors">
-                <Sparkles className="text-white" size={32} />
-              </div>
-              <div className="text-left">
-                <h3 className="text-xl font-bold text-gray-900 mb-1">Wypełnij ankietę</h3>
-                <p className="text-gray-600">Zaktualizuj swoje preferencje i zainteresowania</p>
-              </div>
-            </div>
-          </button>
-
-        </div>
-
-        {/* Suggested Activities */}
-
-        <div className="mt-8 bg-white rounded-xl shadow-md p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="text-indigo-600" size={24} />
-            <h2 className="text-xl font-bold text-gray-900">Sugerowane dla Ciebie</h2>
             <button
-              onClick={handleSuggestActivities}
-              className="ml-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              onClick={refreshSuggestions}
               disabled={isLoading}
+              className="w-full md:w-auto text-sm font-bold bg-white text-indigo-600 hover:bg-indigo-50 border border-indigo-200 px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
             >
-              {isLoading ? 'Ładowanie...' : 'Pokaż sugerowane aktywności'}
+              {isLoading && <Loader2 className="animate-spin" size={16} />}
+              {isLoading ? "Analizowanie..." : "Odśwież propozycje"}
             </button>
           </div>
-          {isLoading ? (
-            <div className="flex justify-center items-center py-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-          ) : suggestedActivities.length > 0 ? (
-            <div className="space-y-4">
+
+          {suggestedActivities.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {suggestedActivities.map((activity) => (
                 <div
                   key={activity.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate('/map')}
+                  onClick={() => navigate("/")}
+                  className="bg-white p-4 rounded-xl border border-indigo-100 hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 mb-1">{activity.title}</h3>
-                      <p className="text-sm text-gray-600 mb-2">{activity.desc}</p>
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
-                          {activity.type}
-                        </span>
-                        <span className="bg-gray-100 text-gray-800 px-2 py-1 rounded">
-                          {activity.date} {activity.time}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="ml-4 text-right">
-                      <div className="text-2xl font-bold text-indigo-600">{activity.score}</div>
-                      <div className="text-xs text-gray-500">dopasowanie</div>
-                    </div>
+                    <h3 className="font-bold text-gray-800 group-hover:text-indigo-600 transition-colors">
+                      {activity.nazwa}
+                    </h3>
+                    <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded font-bold">
+                      {activity.score}%
+                    </span>
                   </div>
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <p className="text-sm text-gray-700 mb-2">
-                      <span className="font-semibold">Powód:</span> {activity.reason}
-                    </p>
-                    <p className="text-sm text-indigo-600 italic">
-                      💬 {activity.icebreaker}
-                    </p>
+                  <p className="text-xs text-gray-500 mb-3 line-clamp-2">
+                    {activity.opis}
+                  </p>
+                  <div className="text-xs font-medium text-indigo-500 bg-indigo-50 p-2 rounded-lg">
+                    💡 {activity.reason}
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>Brak sugerowanych aktywności. Wypełnij ankietę, aby otrzymać personalizowane rekomendacje!</p>
-              <button
-                onClick={() => navigate('/survey')}
-                className="mt-4 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-              >
-                Wypełnij ankietę
-              </button>
+            <div className="text-center py-8 text-indigo-300">
+              <p className="text-sm">
+                Kliknij przycisk, aby wygenerować propozycje.
+              </p>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Recent Activity */}
-        <div className="mt-8 bg-white rounded-xl shadow-md p-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Ostatnia Aktywność</h2>
-          <div className="space-y-4">
-            {[
-              { title: 'Nowe wydarzenie dodane', time: '5 min temu', type: 'success' },
-              { title: 'Użytkownik dołączył do wydarzenia', time: '12 min temu', type: 'info' },
-              { title: 'Aktualizacja lokalizacji', time: '1 godz. temu', type: 'warning' },
-            ].map((activity, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between py-3 border-b last:border-b-0"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      activity.type === 'success'
-                        ? 'bg-green-500'
-                        : activity.type === 'info'
-                        ? 'bg-blue-500'
-                        : 'bg-yellow-500'
-                    }`}
-                  />
-                  <span className="text-gray-900">{activity.title}</span>
-                </div>
-                <span className="text-sm text-gray-500">{activity.time}</span>
-              </div>
-            ))}
+        {/* LISTA: OCZEKUJĄCE */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
+              Oczekujące na akceptację
+            </h2>
           </div>
-        </div>
+          {pendingEvents.length === 0 ? (
+            <p className="text-sm text-gray-400 px-2">
+              Brak oczekujących zgłoszeń.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {pendingEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-yellow-400 border-gray-100 opacity-90"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-md font-bold text-gray-800">
+                        {event.nazwa}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {formatDateTime(event.godzina)}
+                      </p>
+                    </div>
+                    <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                      <Hourglass size={12} /> Oczekuje
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* LISTA: UTWORZONE PRZEZ CIEBIE (ADMIN) */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
+              Utworzone przez Ciebie
+            </h2>
+          </div>
+          {createdEvents.length === 0 ? (
+            <p className="text-sm text-gray-400 px-2">
+              Nie utworzyłeś jeszcze żadnych wydarzeń.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {createdEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-red-500 border-gray-100 hover:shadow-md transition-all"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">
+                        {event.nazwa}
+                      </h3>
+                      <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={14} /> {formatDateTime(event.godzina)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin size={14} /> {event.typ}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                      <ShieldCheck size={12} /> Administrator
+                    </span>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-50 flex justify-end">
+                    <button
+                      onClick={() =>
+                        handleOpenGoogleMaps(event.szerokosc, event.wysokosc)
+                      }
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 transition flex items-center gap-2"
+                    >
+                      <Navigation size={16} />
+                      Nawiguj
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* LISTA: DOŁĄCZONO (POTWIERDZONE) */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
+              Dołączono
+            </h2>
+          </div>
+          {confirmedEvents.length === 0 ? (
+            <p className="text-sm text-gray-400 px-2">
+              Brak nadchodzących wydarzeń, w których uczestniczysz.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {confirmedEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-green-500 border-gray-100 hover:shadow-md transition-all"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">
+                        {event.nazwa}
+                      </h3>
+                      <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={14} /> {formatDateTime(event.godzina)}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                      <CheckCircle2 size={12} /> Dołączono
+                    </span>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-gray-50 flex justify-end">
+                    <button
+                      onClick={() =>
+                        handleOpenGoogleMaps(event.szerokosc, event.wysokosc)
+                      }
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 transition flex items-center gap-2"
+                    >
+                      <Navigation size={16} />
+                      Nawiguj
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* HISTORIA */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <History size={16} className="text-gray-400" />
+            <h2 className="text-lg font-bold text-gray-500 uppercase tracking-wide">
+              Historia
+            </h2>
+          </div>
+          {historyEvents.length === 0 ? (
+            <p className="text-sm text-gray-400 px-2">Historia pusta.</p>
+          ) : (
+            <div className="space-y-3">
+              {historyEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-gray-100 p-4 rounded-xl border border-gray-200 grayscale opacity-75"
+                >
+                  <div className="flex justify-between items-center">
+                    <h3 className="font-bold text-gray-700">{event.nazwa}</h3>
+                    <span className="text-xs font-medium text-gray-500">
+                      {formatDateTime(event.godzina)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -6,12 +6,15 @@ import {
   Circle,
   Popup,
   useMapEvents,
+  useMap,
 } from "react-leaflet";
 import { Navigation } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import type { Activity, Location } from "../../types";
 
-// --- KOMPONENT POMOCNICZY DO KLIKANIA ---
+// --- KOMPONENTY POMOCNICZE ---
+
+// 1. Obsługa kliknięć w mapę
 const LocationSelector = ({
   onSelect,
   isActive,
@@ -29,6 +32,24 @@ const LocationSelector = ({
   return null;
 };
 
+// 2. Automatyczne przesuwanie mapy przy zmianie lokalizacji
+// (Leaflet nie centruje automatycznie po zmianie propsa center w MapContainer, trzeba to wymusić)
+const RecenterMap = ({
+  lat,
+  lng,
+  zoom,
+}: {
+  lat: number;
+  lng: number;
+  zoom: number;
+}) => {
+  const map = useMap();
+  useEffect(() => {
+    map.flyTo([lat, lng], zoom, { duration: 1.5 });
+  }, [lat, lng, zoom, map]);
+  return null;
+};
+
 interface MapViewProps {
   userLocation: Location;
   activities: Activity[];
@@ -36,7 +57,6 @@ interface MapViewProps {
   radius: number;
   mode: "single" | "dev";
   selectedActivity: Activity | null;
-  // Nowe propsy do wybierania lokalizacji
   isSelectingLocation?: boolean;
   onLocationSelect?: (lat: number, lng: number) => void;
 }
@@ -58,7 +78,7 @@ const MapView: React.FC<MapViewProps> = ({
 
   const mapCenter: [number, number] =
     mode === "single" && selectedActivity
-      ? [selectedActivity.lat, selectedActivity.lng]
+      ? [selectedActivity.szerokosc, selectedActivity.wysokosc]
       : [userLocation.lat, userLocation.lng];
 
   return (
@@ -79,7 +99,16 @@ const MapView: React.FC<MapViewProps> = ({
           url="https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png"
         />
 
-        {/* Obsługa kliknięcia w mapę */}
+        {/* Helper do przesuwania widoku, gdy zmieni się userLocation */}
+        {!selectedActivity && (
+          <RecenterMap
+            lat={userLocation.lat}
+            lng={userLocation.lng}
+            zoom={14}
+          />
+        )}
+
+        {/* Logika klikania w mapę */}
         {onLocationSelect && (
           <LocationSelector
             onSelect={onLocationSelect}
@@ -87,61 +116,75 @@ const MapView: React.FC<MapViewProps> = ({
           />
         )}
 
-        {/* --- RADAR (Zasięg) --- */}
+        {/* --- RADAR (Strefa) --- */}
         {mode === "dev" && (
           <Circle
             center={[userLocation.lat, userLocation.lng]}
             radius={radius * 1000}
             pathOptions={{
-              color: isSelectingLocation ? "#f59e0b" : "#3b82f6", // Pomarańczowy przy wyborze
+              color: isSelectingLocation ? "#f59e0b" : "#3b82f6",
               fillColor: isSelectingLocation ? "#f59e0b" : "#3b82f6",
               fillOpacity: 0.05,
               weight: 1,
               dashArray: "5, 10",
+              // KLUCZOWA POPRAWKA:
+              // Kiedy wybieramy lokalizację, wyłączamy interakcję z kółkiem,
+              // żeby kliknięcie "przeszło" do mapy pod spodem.
+              interactive: !isSelectingLocation,
             }}
           />
         )}
 
-        {/* --- POZYCJA UŻYTKOWNIKA (Środek Radaru) --- */}
+        {/* --- POZYCJA UŻYTKOWNIKA --- */}
         <Circle
           center={[userLocation.lat, userLocation.lng]}
           radius={mode === "single" ? 10 : 30}
           pathOptions={{
             color: "white",
-            fillColor: isSelectingLocation ? "#f59e0b" : "#10b981", // Pomarańczowy przy wyborze
+            fillColor: isSelectingLocation ? "#f59e0b" : "#10b981",
             fillOpacity: 0.8,
             weight: 2,
+            // KLUCZOWA POPRAWKA:
+            interactive: !isSelectingLocation,
           }}
         >
-          <Popup>
-            {isSelectingLocation ? "Nowy środek radaru" : "Twój radar"}
-          </Popup>
+          {/* Popup pokazujemy tylko gdy NIE wybieramy lokalizacji */}
+          {!isSelectingLocation && <Popup>To Ty</Popup>}
         </Circle>
 
-        {/* --- MARKERY AKTYWNOŚCI --- */}
+        {/* --- MARKERY --- */}
         {activities.map((activity) => (
           <Marker
             key={activity.id}
-            position={[activity.lat, activity.lng]}
+            position={[activity.szerokosc, activity.wysokosc]}
             eventHandlers={{
-              click: () => onSelectActivity(activity),
+              click: () => {
+                // Zapobiegamy klikaniu w markery podczas wybierania lokalizacji
+                if (!isSelectingLocation) {
+                  onSelectActivity(activity);
+                }
+              },
             }}
+            // Markery też mogą być "przezroczyste" podczas wyboru, jeśli wolisz:
+            // interactive={!isSelectingLocation}
           >
             {mode === "single" && (
               <Popup autoPan={false}>
-                <span className="font-bold">{activity.title}</span>
+                <span className="font-bold">{activity.nazwa}</span>
               </Popup>
             )}
           </Marker>
         ))}
       </MapContainer>
 
-      {/* Przycisk nawigacji (tylko single mode) */}
       {mode === "single" && selectedActivity && (
         <div className="absolute bottom-8 left-0 right-0 px-4 z-[500] flex justify-center">
           <button
             onClick={() =>
-              handleOpenGoogleMaps(selectedActivity.lat, selectedActivity.lng)
+              handleOpenGoogleMaps(
+                selectedActivity.szerokosc,
+                selectedActivity.wysokosc
+              )
             }
             className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl shadow-xl font-bold flex items-center gap-3 transform transition hover:-translate-y-1 w-full max-w-sm justify-center"
           >

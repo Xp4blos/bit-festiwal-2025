@@ -1,24 +1,31 @@
+export interface Organizator {
+  id: number;
+  login: string;
+}
+
+export interface Uczestnik {
+  id: number;
+  login: string;
+  potwierdzony: boolean;
+}
+
 export interface Activity {
   id: number;
+  nazwa: string;
+  opis: string;
+  organizator: Organizator;
+  typ: string; // Zachowujemy string dla elastyczności, lub Union Type jeśli wolisz
+  data: string; // YYYY-MM-DD
+  godzina: string; // ISO string np. 2025-11-29T22:08:40.186Z lub HH:MM:SS
+  wysokosc: number; // Traktujemy jako Longitude (lng)
+  szerokosc: number; // Traktujemy jako Latitude (lat)
+  zakonczone: boolean;
+  uczestnicy: Uczestnik[];
+}
+
+export interface Location {
   lat: number;
   lng: number;
-  title: string;
-  desc: string;
-  type:
-    | "Edukacja i rozwój"
-    | "Sport i aktywność fizyczna"
-    | "Zdrowie i lifestyle"
-    | "Kultura i rozrywka"
-    | "Społeczność i networking"
-    | "Kariera i biznes"
-    | "Technologie i innowacje";
-  author: string;
-  authorId: string;
-  acceptedParticipants: string[];
-  pendingParticipants: string[];
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
-  isEnded: boolean; // ZMIANA: true (1) jeśli zakończone, false (0) jeśli trwa lub nadchodzi
 }
 
 export interface SuggestedActivity extends Activity {
