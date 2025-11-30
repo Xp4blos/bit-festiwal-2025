@@ -1,13 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { Activity } from "../types";
+import type { Activity, AIAnalysisResult, SuggestedActivity } from "../types";
 // Usuwamy import INITIAL_ACTIVITIES, ponieważ pobieramy dane z API
 // import { INITIAL_ACTIVITIES } from "../data/mockData";
-
-type AIAnalysisResult = {
-  score: number;
-  reason: string;
-  icebreaker: string;
-};
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
