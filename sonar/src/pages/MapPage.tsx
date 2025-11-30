@@ -9,20 +9,19 @@ import {
   ArrowLeft,
   Bug,
   Sparkles,
-  Radio,
   CalendarDays,
   Crosshair,
   X,
   RotateCcw,
   Loader2,
-  AlertCircle,
   Plus,
   LogOut,
   User,
+  RefreshCw,
 } from "lucide-react";
-import type { Activity, Location, SuggestedActivity } from "../types";
+import type { Activity, Location } from "../types";
 import { useAuth } from "../context/AuthContext";
-import { useActivities } from "../context/ActivityContext"; // Context
+import { useActivities } from "../context/ActivityContext";
 import useGeoLocation from "../hooks/useGeoLocation";
 import MapView from "../components/map/MapView";
 import ActivityCard from "../components/activity/ActivityCard";
@@ -53,7 +52,7 @@ const MapPage: React.FC = () => {
   const routerLocation = useRouterLocation();
   const locationState = useGeoLocation();
 
-  // --- POBIERANIE DANYCH Z GLOBALNEGO KONTEKSTU ---
+  // Pobieramy dane z kontekstu
   const {
     activities: allActivities,
     suggestedActivities,
@@ -62,7 +61,7 @@ const MapPage: React.FC = () => {
     refreshSuggestions,
   } = useActivities();
 
-  // --- LOCAL STATE ---
+  // Local state
   const [manualLocation, setManualLocation] = useState<Location | null>(null);
   const [isChoosingLocation, setIsChoosingLocation] = useState(false);
   const [radius, setRadius] = useState<number>(2);
@@ -72,6 +71,9 @@ const MapPage: React.FC = () => {
   );
   const [isDevMode, setDevMode] = useState<boolean>(false);
 
+  // Stan lokalny dla odświeżania, aby pokazać spinner na przycisku
+  const [isRefreshingLocal, setIsRefreshingLocal] = useState(false);
+
   const currentLocation = useMemo(() => {
     if (manualLocation) return manualLocation;
     return {
@@ -80,14 +82,14 @@ const MapPage: React.FC = () => {
     };
   }, [locationState, manualLocation]);
 
-  // Odśwież dane jeśli wracamy z CreatePage (routerLocation.state.refresh)
+  // Odśwież po powrocie z tworzenia
   useEffect(() => {
     if (routerLocation.state?.refresh) {
       refreshActivities();
     }
   }, [routerLocation.state]);
 
-  // --- LOGIKA AI: Jeśli brak sugestii w kontekście, wygeneruj je tutaj ---
+  // AI Logic
   useEffect(() => {
     if (
       suggestedActivities.length === 0 &&
@@ -99,7 +101,6 @@ const MapPage: React.FC = () => {
     }
   }, [suggestedActivities.length, isLoading, user, allActivities.length]);
 
-  // --- FUNKCJA JOIN (Pozostaje lokalna, bo aktualizuje tylko ten widok lub wymusza refresh) ---
   const handleJoinActivity = async (activityId: number) => {
     if (!user) {
       alert("Musisz być zalogowany!");
@@ -113,7 +114,6 @@ const MapPage: React.FC = () => {
         body: "",
       });
       if (!response.ok) throw new Error("Błąd join");
-      // Po sukcesie odświeżamy dane globalnie
       await refreshActivities();
     } catch (err) {
       console.error(err);
@@ -121,14 +121,19 @@ const MapPage: React.FC = () => {
     }
   };
 
+  const handleManualRefresh = async () => {
+    setIsRefreshingLocal(true);
+    await refreshActivities();
+    setIsRefreshingLocal(false);
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/auth");
   };
 
-  // --- GŁÓWNA LOGIKA SORTOWANIA LISTY ---
+  // --- SORTOWANIE ---
   const { finalActivitiesList } = useMemo(() => {
-    // 1. Filtrowanie po radiusie i usunięcie błędnych lokalizacji
     const inRadius = allActivities.filter((a) => {
       if (a.szerokosc === 0 && a.wysokosc === 0) return false;
       return (
@@ -141,38 +146,29 @@ const MapPage: React.FC = () => {
       );
     });
 
-    // 2. Oddzielenie aktywnych od zakończonych
     const active = inRadius.filter((a) => !a.zakonczone);
 
-    // 3. Zidentyfikowanie sugestii AI (żeby wiedzieć które są "recommended")
     const suggestedIds = new Set(suggestedActivities.map((s) => s.id));
     const recommendedList = active.filter((a) => suggestedIds.has(a.id));
 
-    // Dodanie metadanych AI do obiektów Activity (score, reason)
     const recommendedWithMeta = recommendedList.map((a) => {
       const meta = suggestedActivities.find((s) => s.id === a.id);
-      return { ...a, _isRecommended: true, _aiMeta: meta }; // Tymczasowe flagi
+      return { ...a, _isRecommended: true, _aiMeta: meta };
     });
 
-    // 4. Reszta aktywności (nie będąca w sugestiach)
-    let others = active.filter((a) => !suggestedIds.has(a.id));
+    const others = active.filter((a) => !suggestedIds.has(a.id));
 
-    // 5. Sortowanie "Reszty" wg Twojego życzenia:
-    //    1. Zapisany i Potwierdzony
-    //    2. Zapisany i Oczekujący
-    //    3. Niezapisany
     others.sort((a, b) => {
       const getScore = (act: Activity) => {
         const participation = act.uczestnicy.find((u) => u.id === user?.id);
-        if (participation?.potwierdzony) return 3; // Najwyżej
-        if (participation && !participation.potwierdzony) return 2; // Środek
-        return 1; // Najniżej
+        if (act.organizator.id === user?.id) return 4; // Moje (admin)
+        if (participation?.potwierdzony) return 3; // Dołączono
+        if (participation && !participation.potwierdzony) return 2; // Oczekuje
+        return 1; // Inne
       };
-      return getScore(b) - getScore(a); // Malejąco
+      return getScore(b) - getScore(a);
     });
 
-    // 6. Finalne połączenie: [Sugestie AI] -> [Reszta posortowana]
-    // Możemy zwrócić to jako jedną płaską listę, ale w UI podzielimy na sekcje
     return {
       finalActivitiesList: {
         recommended: recommendedWithMeta,
@@ -181,13 +177,13 @@ const MapPage: React.FC = () => {
     };
   }, [allActivities, suggestedActivities, radius, currentLocation, user]);
 
-  // --- RENDER ---
+  // --- RENDER LISTY ---
   const renderListContent = () => {
     if (isLoading && allActivities.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-          <Loader2 className="w-10 h-10 animate-spin mb-4 text-blue-500" />
-          <p>Ładowanie...</p>
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+          <p className="font-medium animate-pulse">Ładowanie aktywności...</p>
         </div>
       );
     }
@@ -197,13 +193,30 @@ const MapPage: React.FC = () => {
       finalActivitiesList.others.length === 0
     ) {
       return (
-        <div className="text-center py-10 opacity-60">
-          <p>Brak aktywności w promieniu {radius} km.</p>
+        <div className="text-center py-10 opacity-80 flex flex-col items-center gap-4">
+          <div className="bg-gray-100 p-4 rounded-full">
+            <Navigation size={32} className="text-gray-400" />
+          </div>
+          <div>
+            <p className="text-gray-600 font-bold mb-1">
+              Brak aktywności w pobliżu
+            </p>
+            <p className="text-gray-400 text-sm">
+              Spróbuj zwiększyć zasięg lub odświeżyć listę.
+            </p>
+          </div>
+
           <button
-            onClick={() => setRadius(radius + 5)}
-            className="mt-4 text-blue-600 font-bold text-sm"
+            onClick={handleManualRefresh}
+            disabled={isRefreshingLocal}
+            className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-100 transition flex items-center gap-2"
           >
-            Zwiększ zasięg
+            {isRefreshingLocal ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <RefreshCw size={16} />
+            )}
+            {isRefreshingLocal ? "Pobieranie..." : "Odśwież aktywności"}
           </button>
         </div>
       );
@@ -228,14 +241,14 @@ const MapPage: React.FC = () => {
                   currentUserId={user?.id || 0}
                   onSelect={() => setSelectedActivity(item)}
                   onJoin={handleJoinActivity}
-                  isFeatured={true} // Styl wyróżniony
+                  isFeatured={true}
                 />
               ))}
             </div>
           </section>
         )}
 
-        {/* SEKCJA RESZTA (Posortowana: Potwierdzone > Oczekujące > Inne) */}
+        {/* SEKCJA RESZTA */}
         {finalActivitiesList.others.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
@@ -261,7 +274,6 @@ const MapPage: React.FC = () => {
     );
   };
 
-  // --- OBSŁUGA UI MAPY I LISTY (tak jak wcześniej) ---
   const handleRadiusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
     if (val === "custom") {
@@ -281,7 +293,6 @@ const MapPage: React.FC = () => {
   };
 
   if (selectedActivity || isDevMode || isChoosingLocation) {
-    // Widok mapy pełnoekranowej (bez zmian)
     return (
       <div className="relative h-screen w-full bg-gray-100 flex flex-col">
         {isChoosingLocation && (
@@ -317,7 +328,6 @@ const MapPage: React.FC = () => {
         <div className="flex-1 relative">
           <MapView
             userLocation={currentLocation}
-            // Pokazujemy wszystkie aktywne na mapie
             activities={
               isDevMode
                 ? allActivities
@@ -458,7 +468,7 @@ const MapPage: React.FC = () => {
           <Plus size={32} />
         </button>
       </div>
-      <div className="fixed bottom-26 right-10 z-50">
+      <div className="fixed bottom-26 right-14 z-50">
         <button
           onClick={() => setDevMode(true)}
           className="bg-slate-800 hover:bg-slate-900 text-white p-3 rounded-full shadow-xl transition-transform hover:scale-105 flex items-center gap-2"
