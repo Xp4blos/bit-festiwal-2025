@@ -223,7 +223,7 @@ export const INITIAL_ACTIVITIES: Activity[] = rawActivitiesSource.map(
         id: index + 500,
         login: item.organizator.login,
       },
-      typ: item.typ,
+      typ: item.typ as any,
       data: formatDate(eventDateObj),
       godzina: formatTimeISO(eventDateObj), // Pełny ISO string
       szerokosc: item.szerokosc, // Mapujemy lat -> szerokosc
