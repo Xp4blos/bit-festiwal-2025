@@ -47,3 +47,17 @@ export interface Opinion {
     login: string;
   };
 }
+
+// AI Analysis Result
+export interface AIAnalysisResult {
+  score: number;
+  reason: string;
+  icebreaker: string;
+}
+
+// Suggested Activity with AI recommendations
+export interface SuggestedActivity extends Activity {
+  score: number;
+  reason: string;
+  icebreaker: string;
+}
