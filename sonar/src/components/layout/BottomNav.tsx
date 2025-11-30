@@ -40,14 +40,9 @@ const BottomNav: React.FC = () => {
         {/* Map */}
         <button
           onClick={() => navigate("/map")}
-          className={`flex flex-col items-center justify-center gap-1 w-16 transition-colors ${
-            isActive("/map")
-              ? "text-blue-600"
-              : "text-gray-400 hover:text-gray-600"
-          }`}
+          className="relative -top-5 bg-blue-600 text-white p-3 rounded-full shadow-lg shadow-blue-200 hover:bg-blue-700 transition transform active:scale-95 border-4 border-gray-50"
         >
-          <Map size={24} strokeWidth={isActive("/map") ? 2.5 : 2} />
-          <span className="text-[10px] font-medium">Mapa</span>
+          <Map size={34} strokeWidth={isActive("/map") ? 2.5 : 2} />
         </button>
 
         {/* Settings (New) */}
