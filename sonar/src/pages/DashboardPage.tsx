@@ -2,16 +2,18 @@ import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LogOut,
+  Calendar,
   CheckCircle2,
   Hourglass,
   History,
   Sparkles,
+  MapPin,
   ArrowRight,
+  Navigation,
   Loader2,
   Search,
   ShieldCheck,
   ClipboardList,
-  Navigation, // Ikona do ankiety
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useActivities } from "../context/ActivityContext";
@@ -28,7 +30,7 @@ export default function DashboardPage() {
     refreshSuggestions,
   } = useActivities();
 
-  // --- FILTROWANIE ---
+  // --- FILTROWANIE I LOGIKA BIZNESOWA ---
   const { createdEvents, confirmedEvents, pendingEvents, historyEvents } =
     useMemo(() => {
       if (!user)
@@ -45,14 +47,14 @@ export default function DashboardPage() {
       const history: Activity[] = [];
 
       allActivities.forEach((act) => {
-        // 1. Czy to moje wydarzenie?
+        // 1. Czy to moje wydarzenie? (Jestem organizatorem)
         if (act.organizator.id === user.id) {
           if (act.zakonczone) {
             history.push(act);
           } else {
             created.push(act);
           }
-          return;
+          return; // Jeśli jestem twórcą, nie sprawdzamy już czy jestem na liście uczestników w innych kategoriach
         }
 
         // 2. Jeśli nie moje, to czy uczestniczę?
@@ -118,6 +120,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans pb-20">
+      {/* HEADER */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-20">
         <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -300,95 +303,9 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* LISTY WYDARZEŃ (Bez zmian w logice) */}
-        {/* 1. OCZEKUJĄCE */}
-        <section>
-          <div className="flex items-center gap-2 mb-4 px-2">
-            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
-            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
-              Oczekujące na akceptację
-            </h2>
-          </div>
-          {pendingEvents.length === 0 ? (
-            <p className="text-sm text-gray-400 px-2">
-              Brak oczekujących zgłoszeń.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {pendingEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-yellow-400 border-gray-100 opacity-90"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-md font-bold text-gray-800">
-                        {event.nazwa}
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {formatDateTime(event.godzina)}
-                      </p>
-                    </div>
-                    <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
-                      <Hourglass size={12} /> Oczekuje
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        {/* --- LISTY WYDARZEŃ --- */}
 
-        {/* 2. DOŁĄCZONO */}
-        <section>
-          <div className="flex items-center gap-2 mb-4 px-2">
-            <div className="w-2 h-2 rounded-full bg-green-500"></div>
-            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
-              Dołączono
-            </h2>
-          </div>
-          {confirmedEvents.length === 0 ? (
-            <p className="text-sm text-gray-400 px-2">
-              Brak nadchodzących wydarzeń, w których uczestniczysz.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {confirmedEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-green-500 border-gray-100 hover:shadow-md transition-all"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900 mb-1">
-                        {event.nazwa}
-                      </h3>
-                      <p className="text-sm text-gray-500">
-                        {formatDateTime(event.godzina)}
-                      </p>
-                    </div>
-                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Dołączono
-                    </span>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-gray-50 flex justify-end">
-                    <button
-                      onClick={() =>
-                        handleOpenGoogleMaps(event.szerokosc, event.wysokosc)
-                      }
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 transition flex items-center gap-2"
-                    >
-                      <Navigation size={16} />
-                      Nawiguj
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 3. UTWORZONE */}
+        {/* 1. UTWORZONE PRZEZ CIEBIE (ADMIN) */}
         <section>
           <div className="flex items-center gap-2 mb-4 px-2">
             <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
@@ -416,8 +333,72 @@ export default function DashboardPage() {
                         {formatDateTime(event.godzina)}
                       </p>
                     </div>
-                    <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                    <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 h-fit">
                       <ShieldCheck size={12} /> Administrator
+                    </span>
+                  </div>
+
+                  {/* AKCJE ADMINISTRATORA */}
+                  <div className="mt-4 pt-4 border-t border-gray-50 flex justify-end gap-3">
+                    <button
+                      onClick={() => navigate(`/event/${event.id}/manage`)}
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-red-100 transition flex items-center gap-2"
+                    >
+                      <ShieldCheck size={16} />
+                      Zarządzaj
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        handleOpenGoogleMaps(event.szerokosc, event.wysokosc)
+                      }
+                      className="bg-gray-100 hover:bg-gray-200 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2"
+                    >
+                      <Navigation size={16} />
+                      Nawiguj
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 2. DOŁĄCZONO (POTWIERDZONE) */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <div className="w-2 h-2 rounded-full bg-green-500"></div>
+            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
+              Dołączono (Jesteś na liście)
+            </h2>
+          </div>
+          {confirmedEvents.length === 0 ? (
+            <p className="text-sm text-gray-400 px-2">
+              Brak wydarzeń, w których uczestniczysz.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {confirmedEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-green-500 border-gray-100 hover:shadow-md transition-all"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-1">
+                        {event.nazwa}
+                      </h3>
+                      <div className="flex items-center gap-3 text-sm text-gray-500 mb-3">
+                        <span className="flex items-center gap-1">
+                          <Calendar size={14} /> {formatDateTime(event.godzina)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MapPin size={14} /> {event.typ}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 h-fit">
+                      <CheckCircle2 size={12} /> Dołączono
                     </span>
                   </div>
                   <div className="mt-4 pt-4 border-t border-gray-50 flex justify-end">
@@ -428,9 +409,50 @@ export default function DashboardPage() {
                       className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-blue-100 transition flex items-center gap-2"
                     >
                       <Navigation size={16} />
-                      Nawiguj
+                      Nawiguj (Google Maps)
                     </button>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* 3. OCZEKUJĄCE */}
+        <section>
+          <div className="flex items-center gap-2 mb-4 px-2">
+            <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+            <h2 className="text-lg font-black text-gray-800 uppercase tracking-wide">
+              Oczekujące na akceptację
+            </h2>
+          </div>
+          {pendingEvents.length === 0 ? (
+            <p className="text-sm text-gray-400 px-2">
+              Brak oczekujących zgłoszeń.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {pendingEvents.map((event) => (
+                <div
+                  key={event.id}
+                  className="bg-white p-5 rounded-2xl shadow-sm border border-l-4 border-l-yellow-400 border-gray-100 opacity-90"
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="text-md font-bold text-gray-800">
+                        {event.nazwa}
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {formatDateTime(event.godzina)}
+                      </p>
+                    </div>
+                    <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 h-fit">
+                      <Hourglass size={12} /> Oczekuje
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2 line-clamp-1">
+                    {event.opis}
+                  </p>
                 </div>
               ))}
             </div>

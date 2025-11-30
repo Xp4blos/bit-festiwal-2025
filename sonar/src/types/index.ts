@@ -9,16 +9,25 @@ export interface Uczestnik {
   potwierdzony: boolean;
 }
 
+export type ActivityCategory =
+  | "Edukacja i rozwój"
+  | "Sport i aktywność fizyczna"
+  | "Zdrowie i lifestyle"
+  | "Kultura i rozrywka"
+  | "Społeczność i networking"
+  | "Kariera i biznes"
+  | "Technologie i innowacje";
+
 export interface Activity {
   id: number;
   nazwa: string;
   opis: string;
   organizator: Organizator;
-  typ: string; // Zachowujemy string dla elastyczności, lub Union Type jeśli wolisz
-  data: string; // YYYY-MM-DD
-  godzina: string; // ISO string np. 2025-11-29T22:08:40.186Z lub HH:MM:SS
-  wysokosc: number; // Traktujemy jako Longitude (lng)
-  szerokosc: number; // Traktujemy jako Latitude (lat)
+  typ: ActivityCategory;
+  data: string;
+  godzina: string;
+  wysokosc: number;
+  szerokosc: number;
   zakonczone: boolean;
   uczestnicy: Uczestnik[];
 }
@@ -28,23 +37,13 @@ export interface Location {
   lng: number;
 }
 
-export interface SuggestedActivity extends Activity {
-  score: number;
-  reason: string;
-  icebreaker: string;
-}
-export interface Location {
-  lat: number;
-  lng: number;
-}
-
-export interface AIAnalysisResult {
-  score: number;
-  reason: string;
-  icebreaker: string;
-}
-
-export interface Location {
-  lat: number;
-  lng: number;
+// NOWY TYP: Opinia
+export interface Opinion {
+  id: number;
+  komentarz: string;
+  rating: number;
+  autor: {
+    id: number;
+    login: string;
+  };
 }

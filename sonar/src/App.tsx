@@ -16,6 +16,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { ActivityProvider } from "./context/ActivityContext";
 import { setupLeafletIcons } from "./utils/leafletSetup";
 import "./App.css";
+import EventDetailsPage from "./pages/EventDetailsPage";
 
 setupLeafletIcons();
 
@@ -27,7 +28,14 @@ function App() {
           <Routes>
             {/* Strony bez paska nawigacji */}
             <Route path="/auth" element={<AuthPage />} />
-
+            <Route
+              path="/event/:id/manage"
+              element={
+                <ProtectedRoute>
+                  <EventDetailsPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/survey"
               element={
