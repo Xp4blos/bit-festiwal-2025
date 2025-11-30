@@ -2,6 +2,7 @@ import React from "react";
 import { Users, Search, Plus, X } from "lucide-react";
 import type { Activity } from "../../types";
 import ActivityCard from "../activity/ActivityCard";
+import { useAuth } from "../../context/AuthContext";
 
 interface SidebarProps {
   isOpen: boolean;
@@ -20,6 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onFilterChange,
   onSelectActivity,
 }) => {
+  const { user } = useAuth();
   return (
     <aside
       className={`
@@ -76,6 +78,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               key={activity.id}
               activity={activity}
               onSelect={onSelectActivity}
+              currentUserId={user?.id || 0}
+              onJoin={async () => {}}
+              
             />
           ))
         ) : (
