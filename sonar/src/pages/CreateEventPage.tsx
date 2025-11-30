@@ -173,7 +173,7 @@ const CreateEventPage: React.FC = () => {
             Jesteś jej administratorem.
           </p>
           <button
-            onClick={goBack}
+            onClick={() => navigate("/map")}
             className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-900 transition"
           >
             Wróć do mapy
