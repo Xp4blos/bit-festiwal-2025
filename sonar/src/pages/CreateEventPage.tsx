@@ -173,7 +173,7 @@ const CreateEventPage: React.FC = () => {
             Jesteś jej administratorem.
           </p>
           <button
-            onClick={goBack}
+            onClick={() => navigate("/map")}
             className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold hover:bg-slate-900 transition"
           >
             Wróć do mapy
@@ -187,7 +187,7 @@ const CreateEventPage: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       <header className="bg-white px-4 py-4 shadow-sm sticky top-0 z-50 flex items-center gap-4">
         <button
-          onClick={goBack}
+          onClick={() => navigate("/map")}
           className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition"
         >
           <ArrowLeft size={20} className="text-slate-700" />

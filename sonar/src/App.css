@@ -40,3 +40,38 @@
 .read-the-docs {
   color: #888;
 }
+
+/* --- WCAG STYLES --- */
+
+/* Wysoki Kontrast */
+.wcag-high-contrast {
+  filter: contrast(150%) saturate(120%);
+}
+
+.wcag-high-contrast * {
+  /* Opcjonalnie: wymuszenie czarno-białego tła/tekstu dla ekstremalnego kontrastu */
+  /* background-color: white !important;
+     color: black !important; */
+}
+
+/* Daltonizm - Filtry SVG (zdefiniowane w App.tsx) */
+.wcag-protanopia {
+  filter: url("#protanopia-filter");
+}
+.wcag-deuteranopia {
+  filter: url("#deuteranopia-filter");
+}
+.wcag-tritanopia {
+  filter: url("#tritanopia-filter");
+}
+.wcag-achromatopsia {
+  filter: grayscale(100%);
+}
+
+/* Dark Mode Transitions */
+html {
+  transition: font-size 0.2s ease;
+}
+body {
+  transition: filter 0.3s ease;
+}

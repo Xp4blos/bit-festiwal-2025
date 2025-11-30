@@ -461,12 +461,12 @@ const MapPage: React.FC = () => {
       </main>
 
       <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
-        <button
+        {/* <button
           onClick={() => navigate("/create")}
           className="bg-blue-600 text-white p-4 rounded-full shadow-2xl hover:bg-blue-700 transition transform hover:scale-105 flex items-center justify-center"
         >
           <Plus size={32} />
-        </button>
+        </button> */}
       </div>
       <div className="fixed bottom-26 right-14 z-50">
         <button
